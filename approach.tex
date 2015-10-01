@@ -1,0 +1,46 @@
+%!TEX root = paper.tex
+
+\section{The A-3 Approach}
+\label{sec:approach}
+
+A-3 is first and foremost an architectural style, whose main goal is to simplify the design of distributed systems in which high degrees of component churn make it hard to reliably satisfy functional an non-functional requirements.
+
+Component churn is effectively managed through the introduction of the \emph{group} abstraction. A group collects multiple components, allowing them to be managed as a single and less dynamic entity. Indeed, while components may come and go at unforeseeable rates, a group is much more unlikely to enter or leave the system. The reason why certain components are grouped together is not application-specific, i.e., it is not constrained by the architectural style itself. In practice, components are grouped because they represent stakeholders that have the same goals. 
+
+Inside a group, A-3 identifies a component that can become the group's \emph{supervisor}. Once a supervisor has been selected, all the other components are said to be \emph{follower}s. The supervisor is responsible for guiding its group's followers, as they attempt to satisfy their goals. Indeed, the supervisor is a great place to implement MAPE control logic, as we shall see in Section~\ref{sec:selfAdaptation}. While some components may be able to play both the role of the supervisor and the role of the follower, every component will play one and only one role within a single group, at any given time. 
+
+A group's existence depends on the availability of at least one component capable of playing the supervisor role. Without a specific supervisor a group cannot exist; and if components that can only play the follower role attempt to join a non-existing group, they will be unsuccessful and will have to wait for a supervisor to arrive. Groups are therefore initiated when the first component that can be its supervisor joins the system. 
+
+Not only does the distinction between supervisors and followers help us clarify responsibilities within the group, it also defines the three kinds of intra-group communication modalities allowed within A-3. All communications are message based and asynchronous. In \emph{supervisor-to-follower unicast}, the supervisor component sends a message to a single follower, for example to instruct it on how it should behave in the future; in \emph{supervisor-to-follower multicast}, the supervisor can target multiple (or all) followers with a single message, for the same reasons; while in \emph{follower-to-supervisor unicast}, a follower component sends a message to its supervisor to share information about its activities. Follower-to-follower communication is not allowed. 
+
+A group is a good way to guide multiple components as they attempt to reach their local goals. However, as previously stated, achieving global harmonized goals is equally important. To do this A-3 supports \emph{group composition}. Group composition is enabled by allowing components to play multiple roles in multiple groups. This effectively allows components to become bridges between groups, and to share information across group boundaries. Figure~\ref{fig:configurations} illustrates the possible topological configurations that can emerge through group composition. Each group is identified by a horizontal bar; components that are connected to a bar are members in that group. On the top side of the bar we have the group's supervisor, identified by a light-gray circle; on the bottom side of the bar we have the group's followers, identified by white circles.  
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.9\textwidth]{figures/configurations.pdf}
+\caption{Possible variations of group composition.}
+\label{fig:configurations}
+\end{figure}
+
+
+In case (a) a component is playing two different follower roles in two different groups at the same time, meaning that it has two goals. In case (b) a component is playing the supervisor role in the bottom group, but it is also playing the follower role in the above group. This allows it to contribute in the top group with all the knowledge it collects in the bottom one. In case (c) the supervisor of the top group is a follower in the bottom group, and the supervisor of the bottom group is a follower in the top group. In this case bi-directional cross-group sharing is enabled. 
+
+\subsection{Advanced Features}
+
+A-3 also provides a set of advanced features that are not strictly part of the the architectural style's core essence. These more advanced features were designed as a means to facilitate the runtime management of the group topologies. This is important because, by their very nature, the topologies will change over time, as single components enter or leave the system. We currently have five of these features: \emph{Group State Management}, \emph{Runtime Membership Updates}, \emph{Supervisor Failure Recovery}, \emph{Fine-grained Topology Control}, and \emph{Self-Adaptation}. We shall now go over the first three; the latter two require more space and will be presented in upcoming dedicated sections.
+
+\textbf{Group State Management}. Group State Management (GSM) is a feature that allows supervisors to store important application data directly to the group. The data is then replicated across the group's members to ensure they are redundantly stored for higher reliability. This functionality can also be seen as a means to pass important group management information from one supervisor to its successor, since group supervisors also change over time.
+
+\textbf{Runtime Membership Updates}. Runtime Membership Updates (RMU) is a feature that uses internal group messaging to satisfy two very important goals. The first goal is to provide supervisors with a way to keep track of their followers, as these enter or leave the group. In this case the RMU maintains an always up-to-date list of the group's members, so that it can make it visible to the supervisor at any time. The second goal is to provide the group with a means to become aware of a supervisor failure. This gives the group a chance to establish a new supervisor and avoid cancellation. 
+
+\textbf{Supervisor Failure Recovery}. Supervisor Failure Recovery (SFR) is a feature that allows developers to customize how a group should choose its new supervisor when its existing one fails. This is important since it allows us to avoid single points of failure in the system. By failure we intend both technical failure, for example due to limited battery life, and the situation in which the supervisor simply leaves the group. In SFR developers define multi-dimensional, application-specific, fitness functions for their supervisors. When the group becomes aware, thanks to RMU, that a supervisor has failed, a distributed leader-election algorithm that exploits the fitness function is initiated. This algorithm involves all the followers that can also play the supervisor role in that specific group. The follower that is most suitable to become the new supervisor interrupts its ongoing follower activities, and becomes the new supervisor. The technical details of the distributed leader-election algorithm are left up to the implementation of the A-3 style, and we will discuss them in more detail in \ref{sec:implementation}. 
+
+
+
+
+
+
+
+
+
+

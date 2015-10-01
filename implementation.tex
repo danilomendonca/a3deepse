@@ -1,0 +1,129 @@
+%!TEX root = paper.tex
+
+\section{A-3 Middleware Implementations}
+\label{sec:implementation}
+
+We have developed two different middlewares that support the A-3 architectural style. The first is called \emph{A3JG}; it targets Java component-based applications, and it was built on top of JGroups~\cite{JGroups}, a well-known open-source group communication middleware. The second is called \emph{A3Droid}; it targets Android devices, and it was built on top of AllJoyn~\cite{AllJoyn}, an open-source project that provides a communication framework for enabling interoperability in the Internet of Things. Our goals for these two middleware implementations were to provide platforms that could facilitate both the development process and the deployment of the final system. Thanks to a clear separation of concerns, developers can easily understand where they need to provide application-specific business logic, and what can be delegated to the middleware. 
+
+%goals for the middleware
+
+%two available implementations
+
+\subsection{A3JG} % (fold)
+\label{sub:a3jg}
+
+A3JG is a completely distributed implementation of A-3; meaning that there are no single points of failures. As previously stated it is based on JGroups. JGroups is a toolkit for realiable one--to--one and one--to--many messaging. It is based around the notion of \emph{clusters}. A Cluster is created as a means to group together \emph{node}s that need to communicate. 
+
+JGroups supports a large number of protocols, which allows it to be used in many different application and networking scenarios. Amongts JGroups' multiple features, there are three that are key importance to A-3: \emph{Advanced Cluster Messaging}, \emph{Membership Notification}, and \emph{Replicated HashMaps}.
+
+\emph{Advanced Cluster Messaging} is the most basic feature adopted by A-3, as it allows the supervisor and the followers to communicate within a group. JGroups' messaging supports both UDP and TCP, it automatically fragments large messages for more efficient transmission, and it provides reliability, meaning that lost messages are automatically retransmitted. 
+
+\emph{Membership Notification} means that all nodes within a cluster are notified when the set of nodes within that cluster changes. This is possible because JGroups offers failure detection, meaning it can exclude failed nodes from the membership. This is important since it allows the followers within a group to react as soon as tht group's supervisor becomes absent, either because it has left the group or because it has failed. 
+
+\emph{Replicated HashMaps} uses Java's implementation of a concurrent HashMap, and allows multiple instances of the HashMap to be created in different processes. All the instances have the exact same contents at all times. The replicated HashMap is identified by the unique name of the JGroup cluster it is assdociated with. Upon creation of a new instance, the current state of the map is queried, so that the new instance can update itself. If there are no existing instances, the HashMap is initiated in an empty state. We use this feature within A-3 both to implement Group State Management and MAPE knowledge bases. 
+
+\subsubsection{Basic Architecture} % (fold)
+\label{subsub:basic_architecture}
+
+\begin{figure}[thb]
+	\begin{center}
+		\includegraphics[width=\textwidth]{figures/implementation}
+	\end{center}
+	\caption{(a) Architecture of the A3JG middleware; (b) Developer extension points in the supervisor and follower roles.}
+	\label{fig:implementation}
+\end{figure}
+
+An A3JG-based application is distributed across multiple nodes, called \emph{A3JGNode}s (see Figure~\ref{fig:implementation}a). One node is created for each of the components participating in the application, regardless of the number of groups they intend to participate in. 
+
+Each node has two layers. The bottom layer is provided by the JGroups middleware; it is responsible for supplying the required connectivity capabilities. The top layer, on the other hand, is responsible for providing the abstractions that the developers will use to implement their applications. 
+
+In A3JG each node can have multiple \emph{roles}. Technically, a \emph{role} is a Java class that defines a behaviour for a specific group. The role's behavioural logic is defined by the application's developer by extending one of two abstract Java classes provided by the middleware: \emph{A3JGAbstractSupervisorRole} and \emph{A3JGAbstractFollowerRole}. In A3JG joining a group is subject to the node having an appropriate supervisor or follower role.
+
+Each A3JG node internally contains a unique universal identifier (\emph{id}), as well as four data structures that are used to automatically activate and de-activate certain behaviors as the node enters and leaves groups: \emph{GroupInfos}, \emph{SupervisorRoles}, \emph{FollowerRoles}, and \emph{ActiveRoles}. 
+
+In A3JG the groups that the node will be active in are described by instantiations of the \emph{A3JGGroupInfo} Java class, and are kept in the A3JGNode's \emph{GroupInfos} data structure.  The \emph{SupervisorRoles} and the \emph{FollowerRoles} data structures are used to keep track of what behaviours are available to the node, while the \emph{ActiveRoles} data structure keeps track of what behavioura are actually being executed. Each A3JG node also provides a \emph{inNodeSharedMemory} component. This component is a local synchronized map that can be used by the node's different roles to share runtime information.
+
+% subsection subsection_name (end)
+
+\subsubsection{Developer Extension Points} % (fold)
+\label{subsub:developer_extension_points}
+
+As previously stated, to define an application-specific role a developer must extend either the \emph{A3JGAbstractSupervisorRole} or \emph{A3JGAbstractFollowerRole} class. These abstract classes provide a number of abstract methods that the developer needs to implement with application-specific logic (see Figure~\ref{fig:implementation}b). These methods were designed to maintain a clear separation of concerns between what is to be intended as regular behavioral logic, and logic that pertains to the autonomic management mechanisms introduced in Section~\ref{sec:selfAdaptation}.
+
+The \emph{A3JGAbstractFollowerRole} has three abstract methods:
+
+\begin{itemize}
+	\item \emph{run}. The follower role class implements Runnable; throuh method \emph{run} the developer provides the application-specific logic that represents the follower's behaviour in a specific group. This method that is executed automatically when the node enters a group as a follower.
+	\item \emph{messageFromSupervisor}. This method is automatically executed every time the follower receives an \emph{A3JGMessage} from its supervisor. The contents of the message, as well as the behaviour that is triggered, are application-specific.
+	\item \emph{receiveMAPEMessage}. This method contains logic that pertains to the application's self-adapting capabilities. When a supervisor decides to adapt the way its group is behaving, it may need to communicate with its followers. An A3JGMessage is sent, and the logic contained within this method is triggered.
+\end{itemize}
+
+The \emph{A3JGAbstractSupervisorRole}, on the other hand, has three abstract methods for its main logic, one fitness function, and an extra four methods for managing self-adaptation:
+
+\begin{itemize}
+	\item \emph{run}. The supervisor role class also implements Runnable; developers can use this method to provide the application-specific logic required to supervise the group's activities.
+	\item \emph{messageFromFollower}. This method is executed automatically every time the supervisor receives a message from one of its followers. Its internal logic is application-specific.
+	\item \emph{updateFromGroup}. This method is executed automatically every time there is a change in the group's membership. This is captured by the underlying JGroups layer; it is then elevated to the supervisor node's higher level so that the developer can tailor how the group is being managed to the number of followers that are actually in the group.  
+	\item \emph{fitnessFunc}. This method represents the application-specific fitness function that is used by the A3JG middleware when it is looking for a new node that can play the supervisor role in a specific group.
+	\item \emph{MAPE}. \emph{M}, \emph{A}, \emph{P}, and \emph{E} correspond to four methods for managing the group's self-adaptive capabilities. They stand for monitoring, analysis, planning, and execution, respectively. When a loop is activated, thanks to the rules that are defined in the loop's knowledge base, the methods are automatically called in a sequence by the midlleware.
+\end{itemize}
+
+The loop's knowledge base provides a shared memory space for the MAPE methods, as well as a mechanism to enable information sharing across distributed control loops. Indeed, an execution method of a control loop can write to all the knowledge bases of the groups its node is participating in. We implemented the knowledge base using JBoss Rules, which provides us with a well-known declaraive language for specifying the rules. 
+
+When specifying the activities that are performed in the roles, the developer can exploit the APIs that are provided by A3JG. There are three sets of APIs: one for supervisor messaging, one for follower messaging, and one for topology management. 
+
+% subsection subsection_name (end)
+
+\subsubsection{Design and Implementation Methodology} % (fold)
+\label{subsub:design_methodology}
+
+Given what we have learned about the A-3 architectural style and its A3JG implementation, we can now provide a design and implementation methodology that developers can adopt when creating their applications.
+
+The design of an A-3 application takes place over four phases. In the first phase, the developer must identify and define the different kinds of components that are going to need to be a part of the system. They need to be identified based on the capabilities that they will be able to offer within the system, and on the features that they will need to request of others. In the second phase, the developer must concentrate on identifying what groups will need to exist in the context of the application. Moreover, the developer should ponder whether each group should be autonomic, or not. In the third phase, the developer should design the application logic that will be performed within each group. This means  identifying what it means to be the supervisor or a follower of a specific group. Finally, in the fourth phase, the develop must design the control logic that will be employed in each of the autonomic groups previously defined. This means i) identifying the data that will need to be shared in the knowldege bases, ii) defining the  manipulations that the MAPE methods will need to perform on these data, iii) specifying how the adaptation actions will modify the logic being performed in the group, iv) identifying how and when the control loops will need to be launched, and iv) understanding the interactions and coordinations between distributed control loops that will need to occur.  
+
+Once the developer has finished designing the application, the implementation begins. The implementation of an A-3 application takes place over three phases. In the first, the developer must create an extension of class \emph{A3JGNode} for each of the component types that he/she has identified. The new classes should contain the methods that implement the components' actual capabilities. These methods represent the functionalities that are available to the roles that will be active on a given node. In the second phase, the developer must extend classes \emph{A3JGSupervisorRole} and \emph{A3JGFollowerRole} once for each of the groups identified during the application's design. These new classes will contain the implementation of the business logic that will be executed while the system is running. The logic should define how and when the actions provided by the extension of \emph{A3JGNode} should be performed, as well as which messages should be sent through the group and when. If a group was designed to be autonomic, the new classes will extend \emph{AutonomicA3JGSupervisorRole} and \emph{AutonomicA3JGFollowerRole} instead. In this case, a third development phase is required. In this last phase, the developer needs to implement the supervisor's MAPE methods, as well as a listener on the follower for reacting to the autonomic directives it may receive (i.e., \emph{receiveMAPEMessage}). 
+
+\subsection{A3Droid} % (fold)
+\label{sub:a3droid}
+%Android and AllJoyn-based
+
+AllJoyn is an open-source project led by Qualcomm that provides a cross-technology and cross-vendor solution for integrating various kinds of devices, from appliances to smart phones and tablets. Although it focuses on domotics, we found it to be a valid starting point for the development of a version of the A-3 middleware that could be used on Android devices. Before we can explain how we used AllJoyn to develop A3Droid, we shall provide the reader with a brief introduction to AllJoyn's main features.
+
+AllJoyn integration is based on the notion of a ``virtual'' bus, to which devices must connect if they want to exchange messages. The bus is built as a connected network of nodes, and distringuishes between two different kinds of nodes. \emph{Routing nodes} are responsible for directing messages throughout the network. While routing nodes can connect amongst themselves, \emph{leaf nodes} can only connect directly to routing nodes, giving the virtual bus the structure of a mesh of stars. 
+
+In order to participate in AllJoyn interactions, a device needs to first connect to the virtual bus. This is achieved through the instantiation of a \emph{BusAttachment}. After a connection has been established the device can attempt to discover other participants on the bus. This is achieved through a discovery mechanism that makes use of \emph{well-known names}, i.e., unique app identifiers on the bus. Once other devices have been found, one can proceed to create a \emph{Session}. A Session is a 1--to--1 or 1--to--n grouping of devices that need to exchange messages. Each Session has a unique \emph{Session Id}, allowing devices to easily participate in more than one session at a time.
+
+Once a session has been established AllJoyn allows for two main kinds of interactions. The first kind of interaction consists in the invocation of a \emph{BusMethod}, i.e., a 1--to--1 synchronous message exchange between one AllJoyn participant and another. BusMethods are exposed by \emph{BusObject}s, and are remotely invoked through local proxy objects. The second kind of interaction consists in the use of \emph{BusSignals}. BusSignals allow developers to broadcast asynchronous messages within the context of a single session. The messaging occurs reliably, and the messages are received through appropriate \emph{BusListener}s that need to be registered on the bus. 
+
+From the A-3 developer's perspective, A3Droid is indstinguishable from A3JG, as it provides the exact same set of abstractions and APIs. However, the implementation details of the A-3 middleware are quite different.
+
+In A3Droid each A-3 group is identified by an AllJoyn well-known name. These identifiers are used by participants that want to connect to a specific group, and therefore must be known in advance, or exchanged at run time. 
+
+When a component wants to connect to a group it uses AllJoyn's discovery mechanism with the group's well-known name. At this point a number of things can happen. 
+
+One possibility is that no result is returned, meaning that the group does not exist. If the component attempting to connect can play the supervisor role in that specific group, it can proceed to create the group. This is achieved by creating a specific AllJoyn BUSObject that we call the \emph{Group Manager}. There is always one Group Manager per existing group; it plays an important role in keeping the group alive (it establishes the well-known name on the bus), and in keeping track of the components that are inside the group. As soon as the group manager has been created, the component proceeds to create a second BusObject for the actual supervisor role, and establishes an AllJoyn session between the group manager and the supervisor object. 
+
+A second possibility is that the discovery does not provide any results, but the component attempting to connect cannot play the supervisor role (i.e., it is only a follower). In this case, a second discovery is performed to find the \emph{wait} session, to which the component can then remain connected until the group is created. 
+
+A third possibility is that the discovery returns a result, meaning that the group the component wants to connect to already exists. In this case, if the component can play the follower role in that group it will connect to the group's AllJoyn session. If it cannot play the follower role (i.e., it is only a supervisor), it is superflous and must connect to the \emph{wait} session. 
+
+\begin{figure}[thb]
+	\begin{center}
+		\includegraphics[width=\textwidth]{figures/a3droid}
+	\end{center}
+	\caption{A3Droid}
+	\label{fig:a3droid}
+\end{figure}
+
+When a group is initially created, the group manager object and the supervisor object usually end up being exposed by the same physical device. This, however, is not actually a necessity. In fact, in A3Droid their life-cycles are treated independently. For example, when a supervisor fails this does not mean that the manager also has to fail. Indeed, the failure might not be caused by the physical device itself, but by a software bug. In this case, the manager immediately becomes aware of this and initiates a distributed leader-election algorithm that makes use of AllJoyn signalling to contact all the nodes in the session and choose who will be the new supervisor. This causes the creation a new BusObject, which at this point is provided by a different physical device than the one providing the manager. Another situation that can lead to the manager and supervisor being on different devices occurs whenever either the manager fails and the supervisor does not, or both fail at the same time. Regardless, this leads to the group actually not existing anymore on the virtual bus; the group needs to be re-created. What happens is that multiple components from the defunct group will take action, yet only one will create the manager and re-establish the group. At this point the first component capable of being the supervisor to find the new manager on the bus will become the group's supervisor and intiate the new AllJoyn session. It does not necessarily have to be the same device.
+
+Finally, once the AllJoyn session is created, both supervisor broadcasts to followers and follower to supervisor messaging become feasible. The former is implemented using AllJoyn BusSignals. In practice, the supervisor implements an event emitter, and all the followers in the session implement an appropriate BusListener. The latter is also implemented using AllJoyn BusSignals. In this case all the followers implement an event emitter, and the supervisor registers an appropriate listener. Supervisor to follower unicast messaging, on the other hand, is slightly more complex, since it cannot exploit signalling which is intrinsically broadcast. Instead, we must resort to using AllJoyn BusMethods. Our solution is to have each follower instantiate a uniquely identifiable \emph{UnicastReceiver} BusObject, and then to establish 1--to--1 sessions between the supervisor, which has a local proxy, and the intended receivers, on demand. Figure~\ref{fig:a3droid} shows an example in which we have a group of three devices called \emph{Group A}. \emph{Device 1} is the first to attempt to connect to group A, and as a result it instantiates both a \emph{Group Manager} BusObject and a \emph{Supervisor} BusObject. \emph{Device 1} and \emph{Device 2} join the group at a later moment. When they do they both instantiate a \emph{Follower} BusObject and connect it to \emph{Session Group A}, which already contains the group's \emph{Group Manager} and the \emph{Supervisor} BusObjects, so that they can start exchanging messages correctly. The two devices also instantiate one \emph{Unicast Receiver} BusObject each, to allow supervisor--to--follower unicast messaging to take place. Unicast messaging requires the creation of new sessions. Figure~\ref{fig:a3droid} shows one: \emph{Session Device 2} is created for exchanging messages with Device 2.
+
+
+
+
+
+% subsection a3droid (end)
+
+
+

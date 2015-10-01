@@ -1,0 +1,63 @@
+%!TEX root = paper.tex
+
+\section{Fine-grained Topology Control in A-3}
+\label{sec:distributedControl}
+
+Fine-grained Topology Control (FTC) consists of a set of low-level capabilities that are made available, exclusively to group supervisors, to modify the system's group topology. These capabilities provide small topology modifications that are easy to understand; while more complex topology changes can be obtained by combining more than one ``atomic'' capability.
+
+Each capability is defined as a \emph{topology control operation} that takes multiple parameters (typically group names), changes the topology, and returns a boolean value to clarify whether the modification was successful or not. While there may be many technical reasons why it might be impossible to complete a topology modification (e.g., messaging and networking errors), we are especially interested in signaling situations in which the involved components do not have what is takes to actually implement the desired change. For example, the change might require new supervisors, yet there might not be any followers that can be promoted to supervisor status. Nevertheless, A-3 topology control operations are atomic. This means that they either complete the required modification successfully, or they leave the topology in the exact same configuration it was in, at the moment the operation was requested. The technical details of how this is achieved is delegated to the implementation of the architectural style, and will be discussed in Section~\ref{sec:implementation}.
+
+A-3 currently provides four atomic topology control operations: \emph{split} and \emph{stack}, and their corresponding inverses \emph{merge} and \emph{unstack}. 
+
+%We shall now briefly introduce each, before providing an example of how they can be combined to implement more radical topological change.
+
+\textbf{Split and Merge}. The \emph{split} operation has the effect of removing a certain subset of followers from a group, and placing them in a newly created second group. This requires that a supervisor be found for the new group; if this is not possible, the operation fails. The \emph{split} operation can only be issued by the supervisor of the original group being split, as it is the only component truly responsible for the group's well being.
+
+Figure~\ref{fig:split} shows the effects of a split operation on group $A$; the result is the creation of a second group called $A'$. Group $A$, however, is just one part of a bigger topology. One of its followers, more specifically component number $5$, is also the supervisor of another group, while another follower, this time component number $6$, is also a follower in a third group. The effects of the split are local, involving exclusively groups $A$ and $A'$. All other memberships that involve the components being moved are maintained intact. As a result, we have two possible outcomes, depending on whether component $5$ or component $6$ is chosen to be the supervisor of group $A'$. This will, in turn, depend on the fitness function being used for the supervisor. In both cases, the resulting topology is disconnected. This is not a problem, as it can be reconnected using one of the other topology control operations.
+
+\begin{figure}[htb]
+	\begin{center}
+		\includegraphics[width=\textwidth]{figures/split}
+	\end{center}
+	\caption{Example of a split operation.}
+	\label{fig:split}
+\end{figure}
+
+A-3 actually supports three variants of the split operation. They differ in the way that they choose which components should be moved over to the new group. In all three cases   
+
+\begin{itemize}
+	\item \textbf{split(old, new, amount)}. This first version of the split operation the developer needs to specify three parameters. Parameters \texttt{old} and \texttt{new} represent the group names of the group being split and of the group being created, respectively. Parameter \texttt{amount} specifies the maximum number of components that are to be moved to the new group. The set of selected components includes at least one component that is capable of being the new group's supervisor; the other components are chosen randomly.
+	\item \textbf{split(old, new, membershipFunc)}. The second version also requires parameters \texttt{old} and \texttt{new}. This time the operation's third parameter is a membership function (\texttt{membershipFunc}). The membership function is a filtering function that is implemented by, and executed on, all the components in a group. When executed on a particular component, it returns a boolean value clarifying whether that specific component should be moved or not.
+	\item \textbf{split(old, new, fitnessFunc, amount)}. The third version also requires parameters \texttt{old} and \texttt{new}. The other two parameters are \texttt{fitnessfunc} and \texttt{amount}. The former is a fitness function that is executed on each of the components in the group; the function returns a numerical value between $0$ and $1$. The results of the fitness functions are collected and ranked; the components with the top \texttt{amount} values are selected to be moved.
+\end{itemize}
+
+The inverse of the split operation is \emph{merge}. It has the effect of taking all the components of a group, say $B$, and moving them over to an existing group, say $A$; this has the additional side-effect of destroying group $B$. Once again, the effects are local to $A$ and $B$; all other group memberships that involve the components being moved are maintained intact. The operation is specified as \textbf{merge(destination, source)}, meaning that the components in \texttt{source} are being moved to \texttt{destination}. The \emph{merge} operation can only be issued by the supervisor of the \texttt{source} group, since it is the only component that should be able to decide whether the group should be destroyed.
+
+%random
+%ordered fitness function
+%boolean fitness function
+
+\textbf{Stack and Unstack}. The \emph{stack} operation consists in a mechanism to perform group composition. The operation is defined as \textbf{stack(top, bottom)}. The operation takes the supervisor of the group identified by parameter \texttt{bottom} and includes it, as a follower, in the group identified by parameter \texttt{top}. The \emph{stack} operation can only be called by the supervisor of group \texttt{bottom}, as the decision to join another group as a follwere is its to make.
+
+\begin{figure}[htb]
+	\begin{center}
+		\includegraphics[width=\textwidth]{figures/stack}
+	\end{center}
+	\caption{Example of a stack operation.}
+	\label{fig:stack}
+\end{figure}
+
+Figure~\ref{fig:stack} continues the simple example we introduced to explain the split operation. As the reader can see, we have taken the two possible outcomes of our split operation and applied a single stack operation to each, with the goal of providing a fully connected topology. In the top example, we have called operation \textbf{stack(B, A)}; the result is that component $1$ is now both the supervisor of group $A$ and a follower in group $B$. In the bottom example, we have called operation \textbf{stack(A, A')}; in this case, the result is that component $5$ is now both the supervisor of group $A'$ and a follower in group $A$. 
+
+The inverse of the stack operation is \emph{unstack(top, bottom)}. The assumption is that group \texttt{bottom} is stacked beneath group \texttt{top}; the result is that the supervisor of group \texttt{bottom} is removed entirely from group \texttt{top}. Say we have stacked group $A$ on top of group $A'$, just like in the last example. By executing \textbf{unstack(A, A')} component $5$ is removed from group $A$, leading to a disconnected topology that will need to be re-connected through some other topology control operation. The \emph{unstack} operation can only be called by the supervisor of group \texttt{bottom}; indeed, to the eyes of the supervisor of the \texttt{top} group , the supervisor of the \texttt{bottom} group is simply another follower it is taking care of. 
+
+%\textbf{Peers and Detach}. The \emph{peers} operation provides developers with another form of group composition. The operation is defined as \textbf{peer}
+
+%\textbf{Hierarchy}.
+
+%operations
+
+%split - merge
+%stack - unstack
+%peers - detach
+%hierarchy

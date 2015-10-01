@@ -1,0 +1,31 @@
+%!TEX root = paper.tex
+
+\section{Self-Adaptation in A-3}
+\label{sec:selfAdaptation}
+
+Self-Adaptation is the capability of a system to modify its behaviours as a reaction to change in its context of execution~\cite{Bruni1, Bruni2}. A-3 supports three kinds of adaptation. In \emph{Parameter Adaptation} the developer identifies a set of modifiable parameters that have an impact on the system's behaviour. In \emph{Architectural Adaptation} the developer's goal is to dynamically modify the system's topology. Finally, in \emph{Compositional Adaptation} the developer focuses on changing the set of components that are participating in the system. 
+
+In the A-3 approach self-adaptation is achieved by deploying MAPE-K control loops~\cite{mape} to the system's topology. The traditional MAPE-K control loop consists of four phases. In the \emph{Monitoring} phase, runtime data are collected from the system and its context of execution. These data are manipulated and used to assess the system's behaviour in the \emph{Analysis} phase. If adaptation is required, a adaptation strategy is established during the \emph{Planning} phase. Finally, the strategy is carried out during the \emph{Execution} phase. The four phases are supported by a common \emph{Knowledge base}, which can be used to kepp a representation of the system's runtime state, of its adaptation goals, and of historical data collected in previous monitoring phases. 
+
+Systems built using A-3 are characterized by high churn rates, and, as we have seen, a lot of our effort has gone into developing a robust and scalable solution that avoids single points of failure. This means that having a centralized MAPE-K control loops that looks over the entire system is not an acceptable solution. Indeed, not only would it be a potential single point of failure; it would also introduce a performance bootleneck, as it would have to receive all the runtime data that are collected through monitoring. Instead, a decentralized approach to MAPE-K control loops is required. The problem lies in how to identify where a MAPE-K control loop can be deployed.
+
+\begin{figure}[tb]
+	\begin{center}
+		\includegraphics[width=0.9\textwidth]{figures/adaptation}
+	\end{center}
+	\caption{(a) The MAPE-K control loop is deployed to the group's supervisor; (b) Distributed MAPE-K control loops collaborate through their knowledge bases.}
+	\label{fig:self-adaptation}
+\end{figure}
+
+In A-3 we have the perfect architectural abstraction for this: the group. If we deploy a MAPE control loop to a group's supervisor (see Figure~\ref{fig:self-adaptation}a), the control logic has, by design, direct access to all of the group's components, making it easy to collect runtime data about their behaviour. Furthermore, Group State Management (GSM) provides an efficient and reliable way to implement the loop's knowledge base. 
+
+This, however, is a partial solution; it only allows us to adapt a single group's behaviour, independently from what is happening in the other groups. With multiple groups in a system, we will most likely have multiple MAPE-K control loops. Ideally, we would like them to collaborate to achieve system-wide adaptation. Litearture has identified multiple interaction patterns for distributed control loops~\cite{mirandola}. For example, we have \emph{hierarchical} patterns, in which control is organized across different levels, and each level tackles an adaptation problem at a different time scale. Lower levels are more timely and typically work at a more ``local'' scale, while higher levels are slower and typically work at a more ``global'' scale. We also have \emph{coordinated control} patterns, in which all control loops are deemed equal, and the phases from one control loop can communicate with the equivalent phases in another. Finally, we have \emph{information sharing} patterns, in which the monitoring phases of various control loops can communicate. 
+
+A-3, on the other hand, presents a novel approach to coordinating distributed control loops that exploits the group composition mechanisms of the architectural style itself (see Figure~\ref{fig:self-adaptation}b). In practice, if a group's supervisor is also a supervisor or a follower in other groups, the \emph{execution} phase of its control loop can write data to the other groups' knowledge bases. This effectively allows ``neighbouring'' control loops to share important information. 
+
+A-3 also introduces a mechanism to regulate control loop activation. Being able to regulate when a loop will execute is important; it allows us both to avoid hysteresis and to synchronize important adaptation decisions across the system. Regulation is achieved through \emph{loop-activation} rules that predicate over the content of the loop's knowledge base. Notice that this does not preclude us from having periodic activations, or continuous looping, since the loop itself can add the required data to the knowledge base. The language used to write the activation rules is delegated to the implementation of the architectural style, and will be discussed in Section~\ref{sec:implementation}.
+
+
+
+
+

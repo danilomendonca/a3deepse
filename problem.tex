@@ -1,0 +1,61 @@
+%!TEX root = paper.tex
+
+\section{Challenges}
+\label{sec:problem}
+
+Developing modern pervasive distributed applications is a multi-faceted problem that poses many different kinds of challenges to system engineers. In this section we shall discuss, in detail, what these challenges are, and formulate requirements for a middleware that can ease the development and management of these systems.
+
+We concentrate on distributed systems in which we have high amounts of participating software components, and in which these components are free to enter or leave the system freely. 
+
+\subsection{Global vs Local Decision Making}
+\label{sub:globlaLocal}
+
+Software components in a modern distributed system can pursue two kinds of goals. They can have personal stakeholder (\emph{local}) goals that may, or may not, be in contrast with those of the other components; and then they have the goals of the overall system (i.e., \emph{global} goals). In case the components have contrasting personal goals, these goals need to be harmonized to allow for a sustainable system. The execution of a component should not disrupt that of its collaborators; on the contrary, whenever possible, it should contribute to their well-being, as well as to their own. 
+
+In a modern distributed system we cannot assume there will always be a centralized component that can harmonize and coordinate the actions of all the components that are participating in the system. Instead, we need to responsabilize each component, allowing it to ``locally'' take decisions regarding its behavior, according to its knowledge of itself (e.g., available resources and capabilities) and of its surroundings (e.g., the other components in the execution environment). However, the local decisions that are taken should also collectively steer the overall application in the direction of reaching its global goals. For this we need the compoents' actions to be coordinated by a distributed coordination mechanism.
+
+
+\subsection{Distributed Component Coordination}
+\label{sub:coordination}
+
+Distributed coordination is about sharing local knowledge with our neighboring components,so that the local decisions that we make can lead to gloabl functional and non-functional satisfaction. This means that we need means to allow components to share information about the role they are playing in the system, at any given time, and about their future intentions. This may require coordination protocols that exploit continuous feedback between components.
+
+Distributed component coordination imposes strong communication requirements. First of all, the system needs to support high volumes of components, and it should ensure that messaging can occur with high performance, fast response times, and high data transfers. Second, the system should ensure communication even when the underlying network infrastructures are unreliable. For example, WiFi and 3G networks often fail to scale to a large number of subjects due to physical limitations. As a result, their signal strengths may be subject to non-uniform variations. 
+
+
+\subsection{Resilience to Component Churn}
+\label{sub:resilience}
+
+Modern pervasive applications consist of ever more capable devices (e.g., smartphones, tablets, etc.) that are always connected, thanks to readily available Internet access, and aware of their geo-location and of their surroundings, due to increasingly accurate on-board sensors. This has allowed us to develop ever more useful and engaging distributed applications. Good examples of these applications are those that commonly go under the name of ``Smart Spaces''. For example, we can have a ``smart supermarket'', where customers can interact with the products to get information abouth their provenance, on how they should be stored for optimal maintenance, or recipes within which they can be used. Another example could be a ``smart hospital'', where patients and family members can be dynamically routed to their desintations, avoiding jams and hazards.
+
+One of the main pecularities of these applications is that their software components are installed onto mobile devices that can, and will, enter and leave the system with no previous notice, a phenomenon that leads to high component \emph{churn}. Component churn brings a new degree of uncertainty to the table, one that designers of distributed pervasive systems need to be able to cope with. It is impossible to know, at design time, what components will actually be available at run time to pursue the application's global functional and non-functional goals. This situation is only aggravated by the fact that components can also be heterogenous, and have different qualitative characteristics, such as faster computation, better network connectivity, longer-living batteries, and so on. 
+
+A modern pervasive system cannot rely on any single component; instead, it needs to be highly reliable and available, yet constructed using components that are potentially volatile. Moreover, this needs to be achieved ``by design''.
+
+\subsection{Self-Adaptive Behaviors}
+\label{sub:selfAdaptive}
+
+%application logic vs adaptive behavior
+%interacting control loops (hierachical and not)
+
+Coping with unforseen change is an important capability that modern distributed systems must possess. Change can have many different sources. It can consist in a modification in the application's requirements, or in those of its stakeholders; it can emerge in terms of variations in the application's context of execution; or it can be caused by fluctuations in the non-functional qualities of the application's components. Regardless, the application, both in terms of its independent components and as a whole, should be able to react to change, to keep the application's functionality and Quality of Service intact.
+
+A common way to cope with change is to enrich the application with self-adaptive behavior. However, this additional behavior should not be intertwined with the application's business logic, as this would make it much harder to maintain, as further sources of change emerge over time. It has become common, in self-adaptive applications, to resort to some form of Monitoring -- Analysis -- Planning -- Execution (MAPE) control loop, in which the adaptation logic is clearly treated as a separate concern. 
+
+Although we believe the general approach of introducing MAPE control is correct, we advocate that a single control loop that manages adaptation globally is not be feasible. Instead, single components should be made responsible for their own self-adaptation, similarly to how how they perform regular business decision making. This, however, inevitably leads to a situation in which multiple self-adaptive control loops are distributed throughout the system, and need to be coordinated. 
+
+\subsection{The Requirements}
+\label{sub:requirements}
+
+Given these challenges we have defined the following requirements for our approach.
+
+\begin{itemize}
+	\item \textbf{Component independence}. Components should be independent entities that take their business decisions on knowledge that they have of themselves or of the surrounding environment. 
+	\item \textbf{Compositionality}. The middleware should provide designers with abstractions for tackling global decision making. This should be achieved through the composition of smaller local decisions.
+	\item \textbf{Distributed Coordination}. The middleware should support knowledge sharing between components, so that they can coordinate the ordering and timing of their actions.
+	\item \textbf{Reliable Communication}. The middleware should support the reliable delivery of messages. Components should be guaranteed that their messages are delivered, and in the order they were sent. 
+	\item \textbf{Resiliance to Churn}. The middleware should support designers in creating architectures that are resiliant in the wake of volatile components. 
+	\item \textbf{Support for Hetereogeneous Components}. The middleware should facilitate the inclusion of components that have heterogenous quality.
+	\item \textbf{Support for Distributed Change Management}. The middleware should support the designer in the creation, deployment, and execution of multiple control loops. It should support knolwedge sharing between control loops that need to be able to ``impact'' one another. 
+\end{itemize}
+
